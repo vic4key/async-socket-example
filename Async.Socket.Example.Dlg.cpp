@@ -136,11 +136,11 @@ void CAsyncSocketExampleDlg::OnBnClicked_Start()
   struct sockaddr_in sai = { 0 };
   sai.sin_addr.s_addr = htonl(m_ip);
   const auto ip = inet_ntoa(sai.sin_addr);
-  const vu::Socket::sEndPoint EndPoint(ip, m_port);
+  const vu::Socket::Endpoint endpoint(ip, m_port);
 
   if (m_mode == MODE_SERVER)
   {
-    check(m_ptr_socket->bind(EndPoint));
+    check(m_ptr_socket->bind(endpoint));
     this->add_log("Binded");
 
     check(m_ptr_socket->listen());
@@ -148,7 +148,7 @@ void CAsyncSocketExampleDlg::OnBnClicked_Start()
   }
   else if (m_mode == MODE_CLIENT)
   {
-    check(m_ptr_socket->connect(EndPoint));
+    check(m_ptr_socket->connect(endpoint));
     this->add_log("Connected");
   }
 
@@ -203,6 +203,7 @@ void CAsyncSocketExampleDlg::OnBnClicked_Send()
         CString s = m_msg + L'\n';
         std::string data = vu::to_string_A(s.GetBuffer());
         m_ptr_socket->send(client, data.data(), int(data.size()));
+        this->add_log(data);
       }
     }
   }
