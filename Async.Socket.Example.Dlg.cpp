@@ -22,6 +22,8 @@ const int MODE_CLIENT = 1;
 
 const CString DEFAULT_MSG[] = { L"hello from server", L"hello from client" };
 
+#define WM_UPDATE_UI (WM_USER + 1)
+
 #define check(ret)\
   if ((ret) != vu::VU_OK) throw std::runtime_error(m_ptr_socket->get_last_error_message_A());
 
@@ -47,6 +49,7 @@ void CAsyncSocketExampleDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CAsyncSocketExampleDlg, CDialogEx)
   ON_WM_CLOSE()
+  ON_MESSAGE(WM_UPDATE_UI, OnUpdateUI)
   ON_BN_CLICKED(IDC_START, OnBnClicked_Start)
   ON_BN_CLICKED(IDC_STOP,  OnBnClicked_Stop)
   ON_BN_CLICKED(IDC_CLEAR, OnBnClicked_Clear)
@@ -98,6 +101,7 @@ void CAsyncSocketExampleDlg::OnBnClicked_Start()
     this->fill_connections();
     auto s = vu::format_A("connected to %d\n", connection.get_remote_sai().sin_port);
     this->add_log(s);
+    this->PostMessage(WM_UPDATE_UI);
   });
 
   m_ptr_socket->on(vu::AsyncSocket::OPEN, [&](vu::Socket& connection) -> void
@@ -105,6 +109,7 @@ void CAsyncSocketExampleDlg::OnBnClicked_Start()
     this->fill_connections();
     auto s = vu::format_A("accepted %d\n", connection.get_remote_sai().sin_port);
     this->add_log(s);
+    this->PostMessage(WM_UPDATE_UI);
   });
 
   m_ptr_socket->on(vu::AsyncSocket::CLOSE, [&](vu::Socket& connection) -> void
@@ -112,6 +117,13 @@ void CAsyncSocketExampleDlg::OnBnClicked_Start()
     this->fill_connections();
     auto s = vu::format_A("closed %d\n", connection.get_remote_sai().sin_port);
     this->add_log(s);
+
+    if (m_mode == MODE_CLIENT)
+    {
+      this->PostMessage(WM_COMMAND, IDC_STOP);
+    }
+
+    this->PostMessage(WM_UPDATE_UI);
   });
 
   m_ptr_socket->on(vu::AsyncSocket::SEND, [&](vu::Socket& connection) -> void
@@ -136,7 +148,7 @@ void CAsyncSocketExampleDlg::OnBnClicked_Start()
   struct sockaddr_in sai = { 0 };
   sai.sin_addr.s_addr = htonl(m_ip);
   const auto ip = inet_ntoa(sai.sin_addr);
-  const vu::Socket::Endpoint endpoint(ip, m_port);
+  const vu::Endpoint endpoint(ip, m_port);
 
   if (m_mode == MODE_SERVER)
   {
@@ -152,18 +164,23 @@ void CAsyncSocketExampleDlg::OnBnClicked_Start()
     this->add_log("Connected");
   }
 
-  check(m_ptr_socket->run_in_thread());
+  check(m_ptr_socket->run(true));
   this->add_log("Running...");
 
   VU_CPP_CATCH(std::runtime_error& e)
   {
-    delete m_ptr_socket;
-    m_ptr_socket = nullptr;
-    this->add_log("Destroy");
+    if (m_ptr_socket != nullptr)
+    {
+      delete m_ptr_socket;
+      m_ptr_socket = nullptr;
+      this->add_log("Destroy");
+    }
 
     const auto s = vu::to_string_W(e.what());
     AfxMessageBox(s.c_str());
   }
+
+  this->PostMessage(WM_UPDATE_UI);
 }
 
 void CAsyncSocketExampleDlg::OnBnClicked_Stop()
@@ -178,11 +195,11 @@ void CAsyncSocketExampleDlg::OnBnClicked_Stop()
   m_ptr_socket->stop();
   this->add_log("Stopped");
 
-  m_ptr_socket->close();
-
   delete m_ptr_socket;
   m_ptr_socket = nullptr;
   this->add_log("Destroy");
+
+  this->PostMessage(WM_UPDATE_UI);
 }
 
 void CAsyncSocketExampleDlg::OnBnClicked_Clear()
@@ -255,16 +272,20 @@ void CAsyncSocketExampleDlg::OnBnClicked_ModeClient()
 BOOL CAsyncSocketExampleDlg::OnNotify(WPARAM wParam, LPARAM lParam, LRESULT* pResult)
 {
   auto result = __super::OnNotify(wParam, lParam, pResult);
+  this->PostMessage(WM_UPDATE_UI);
+  return result;
+}
 
-  GetDlgItem(IDC_IP)->EnableWindow(m_ptr_socket == nullptr || !m_ptr_socket->running());
-  GetDlgItem(IDC_PORT)->EnableWindow(m_ptr_socket == nullptr || !m_ptr_socket->running());
+LRESULT CAsyncSocketExampleDlg::OnUpdateUI(WPARAM wParam, LPARAM lParam)
+{
+  GetDlgItem(IDC_IP)->EnableWindow(m_ptr_socket    == nullptr || !m_ptr_socket->running());
+  GetDlgItem(IDC_PORT)->EnableWindow(m_ptr_socket  == nullptr || !m_ptr_socket->running());
   GetDlgItem(IDC_START)->EnableWindow(m_ptr_socket == nullptr || !m_ptr_socket->running());
   GetDlgItem(IDC_STOP)->EnableWindow(m_ptr_socket != nullptr && m_ptr_socket->running());
   GetDlgItem(IDC_SEND)->EnableWindow(m_ptr_socket != nullptr && m_ptr_socket->running());
   GetDlgItem(IDC_MODE_SERVER)->EnableWindow(m_ptr_socket == nullptr || !m_ptr_socket->running());
   GetDlgItem(IDC_MODE_CLIENT)->EnableWindow(m_ptr_socket == nullptr || !m_ptr_socket->running());
-
-  return result;
+  return 0;
 }
 
 void CAsyncSocketExampleDlg::OnClose()
@@ -288,7 +309,8 @@ void CAsyncSocketExampleDlg::fill_connections()
   m_connections.SetItemData(idx, DWORD_PTR(NULL)); // treat a null pointer as all connections
   m_connections.SetCurSel(idx);
 
-  auto connections = m_ptr_socket->get_connections();
+  std::set<SOCKET> connections;
+  m_ptr_socket->get_connections(connections);
   for (const auto& e : connections)
   {
     vu::Socket socket;

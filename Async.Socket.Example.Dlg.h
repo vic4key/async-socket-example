@@ -22,6 +22,7 @@ protected:
 
 	virtual BOOL OnInitDialog();
 	virtual BOOL OnNotify(WPARAM wParam, LPARAM lParam, LRESULT* pResult);
+	LRESULT OnUpdateUI(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnClose();
 	afx_msg void OnBnClicked_Send();
 	afx_msg void OnBnClicked_Clear();
