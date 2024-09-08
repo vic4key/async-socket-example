@@ -305,12 +305,16 @@ void CAsyncSocketExampleDlg::fill_connections()
 {
   m_connections.ResetContent();
 
-  int idx = m_connections.AddString(L"All Connections");
-  m_connections.SetItemData(idx, DWORD_PTR(NULL)); // treat a null pointer as all connections
-  m_connections.SetCurSel(idx);
-
   std::set<SOCKET> connections;
   m_ptr_socket->get_connections(connections);
+
+  if (!connections.empty())
+  {
+    int idx = m_connections.AddString(L"All Connections");
+    m_connections.SetItemData(idx, DWORD_PTR(NULL)); // treat a null pointer as all connections
+    m_connections.SetCurSel(idx);
+  }
+
   for (const auto& e : connections)
   {
     vu::Socket socket;
